@@ -1,0 +1,8 @@
+## Interface: 120000
+## Title: Azeroth Agents
+## Notes: Mini jeu de déduction en 5x5 pour groupe WoW
+## Author: Alexandre
+## Version: 0.1.0
+## SavedVariables: AzerothAgentsDB
+
+AzerothAgents.lua

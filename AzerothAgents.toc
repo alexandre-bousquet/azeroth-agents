@@ -1,7 +1,7 @@
 ## Interface: 120000
 ## Title: Azeroth Agents
-## Notes: Mini jeu de déduction en 5x5 pour groupe WoW
-## Author: Alexandre
+## Notes: Mini jeu de déduction de en 5x5 pour groupe sur World of Warcraft
+## Author: Alexandre BOUSQUET
 ## Version: 0.1.0
 ## SavedVariables: AzerothAgentsDB
 

@@ -1,8 +1,13 @@
-## Interface: 120000
+## Interface: 120007
 ## Title: Azeroth Agents
-## Notes: Mini jeu de déduction de en 5x5 pour groupe sur World of Warcraft
-## Author: Alexandre BOUSQUET
-## Version: 0.1.0
+## Notes: Mini-jeu d'agents secrets en 5x5 dans World of Warcraft
+## Author: Alexandre Bousquet
+## Version: 0.2.2
 ## SavedVariables: AzerothAgentsDB
 
-AzerothAgents.lua
+Core.lua
+Words.lua
+Game.lua
+Lobby.lua
+Comm.lua
+UI.lua

@@ -324,7 +324,7 @@ function AA.UI:Init()
 
     ui.statsText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     ui.statsText:SetPoint("BOTTOM", 0, 14)
-    ui.statsText:SetText("v" .. (AA.version or "0.2.2"))
+    ui.statsText:SetText("v" .. (AA.version or "0.2.3"))
 
     self:Refresh()
 end

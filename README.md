@@ -84,4 +84,4 @@ Cette version est pensée pour jouer entre amis. Elle ne cherche pas à empêche
 
 ## Licence / assets
 
-Le projet n’utilise pas d’assets externes dans sa v0.2. L’interface repose sur les templates et primitives UI disponibles dans le client World of Warcraft.
+Le projet n’utilise pas d’assets externes dans sa v0.2.3. L’interface repose sur les templates et primitives UI disponibles dans le client World of Warcraft.

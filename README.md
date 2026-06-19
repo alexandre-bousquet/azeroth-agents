@@ -11,7 +11,7 @@ Pensé comme une version légère, conviviale et roleplay d’un jeu d’agents 
 
 ## État du projet
 
-Version actuelle : **v0.2.2**  
+Version actuelle : **v0.2.3**  
 Interface WoW : **120007**
 
 ## Installation

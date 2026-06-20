@@ -260,6 +260,12 @@ end
 function AA.Lobby:Leave()
     local me = LocalName()
 
+    if not state.active then
+        state.message = "Aucun lobby actif."
+        Refresh()
+        return
+    end
+
     if AA.Comm then
         AA.Comm:Broadcast("LEAVE", me)
     end
@@ -320,6 +326,12 @@ function AA.Lobby:SetRole(role)
 end
 
 function AA.Lobby:SetReady(ready)
+    if not state.active then
+        state.message = "Cree ou rejoins un lobby avant de te declarer pret."
+        Refresh()
+        return
+    end
+
     if AA.Game and AA.Game.GetState and AA.Game:GetState().phase == "PLAYING" then
         state.message = "La mission est en cours."
         Refresh()

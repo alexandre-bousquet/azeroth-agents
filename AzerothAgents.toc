@@ -2,7 +2,7 @@
 ## Title: Azeroth Agents
 ## Notes: Mini-jeu d'agents secrets en 5x5 dans World of Warcraft
 ## Author: Alexandre Bousquet
-## Version: 0.3.0
+## Version: 0.3.1
 ## SavedVariables: AzerothAgentsDB
 
 Core.lua

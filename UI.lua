@@ -228,12 +228,18 @@ local function RefreshButtons()
         SetButtonEnabled(ui.joinButton, not lobbyActive)
     end
 
+    if ui.leaveButton then
+        SetButtonEnabled(ui.leaveButton, lobbyActive)
+    end
+
     if ui.readyButton then
         if localPlayer and localPlayer.ready then
             ui.readyButton:SetText("Pas prêt")
         else
             ui.readyButton:SetText("Prêt")
         end
+
+        SetButtonEnabled(ui.readyButton, lobbyActive)
     end
 
     if ui.launchButton then
@@ -242,19 +248,19 @@ local function RefreshButtons()
     end
 
     if ui.redButton then
-        SetButtonEnabled(ui.redButton, not localPlayer or localPlayer.team ~= "RED")
+        SetButtonEnabled(ui.redButton, lobbyActive and (not localPlayer or localPlayer.team ~= "RED"))
     end
 
     if ui.blueButton then
-        SetButtonEnabled(ui.blueButton, not localPlayer or localPlayer.team ~= "BLUE")
+        SetButtonEnabled(ui.blueButton, lobbyActive and (not localPlayer or localPlayer.team ~= "BLUE"))
     end
 
     if ui.agentButton then
-        SetButtonEnabled(ui.agentButton, not localPlayer or localPlayer.role ~= "AGENT")
+        SetButtonEnabled(ui.agentButton, lobbyActive and (not localPlayer or localPlayer.role ~= "AGENT"))
     end
 
     if ui.spyRoleButton then
-        SetButtonEnabled(ui.spyRoleButton, not localPlayer or localPlayer.role ~= "SPYMASTER")
+        SetButtonEnabled(ui.spyRoleButton, lobbyActive and (not localPlayer or localPlayer.role ~= "SPYMASTER"))
     end
 
     if ui.endTurnButton then

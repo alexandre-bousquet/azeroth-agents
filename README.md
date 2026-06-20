@@ -11,7 +11,7 @@ Pensé comme une version légère, conviviale et roleplay d’un jeu d’agents 
 
 ## État du projet
 
-Version actuelle : **v0.4.0**
+Version actuelle : **v0.4.1**
 Interface WoW : **120007**
 
 Cette version ajoute la localisation :
@@ -29,6 +29,8 @@ Copier le dossier `AzerothAgents` dans :
 ```txt
 World of Warcraft/_retail_/Interface/AddOns/
 ```
+
+ou avec le lien [CurseForge](https://www.curseforge.com/wow/addons/azeroth-agents)
 
 Puis relancer le jeu ou exécuter :
 

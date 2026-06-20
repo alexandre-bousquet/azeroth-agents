@@ -11,29 +11,16 @@ Pensé comme une version légère, conviviale et roleplay d’un jeu d’agents 
 
 ## État du projet
 
-Version actuelle : **v0.3.0**
+Version actuelle : **v0.4.0**
 Interface WoW : **120007**
 
-Cette version ajoute la première couche de fiabilisation de mission :
+Cette version ajoute la localisation :
 
-- interface graphique en jeu ;
-- plateau 5x5 ;
-- répartition 9 / 8 / 7 / 1 ;
-- lobby groupe / raid ;
-- création et jonction de lobby ;
-- choix d’équipe Rouge / Bleu ;
-- choix de rôle Agent / Maître-espion ;
-- état prêt / pas prêt ;
-- lancement réservé à l’hôte ;
-- synchronisation de départ via seed ;
-- révélation de cartes synchronisée ;
-- passage de tour synchronisé ;
-- reset synchronisé ;
-- bouton **Resync** ;
-- restauration locale après `/reload` ;
-- état de plateau reconstruit via seed + masque des cartes révélées ;
-- champ d’indice + nombre ;
-- journal de mission.
+- textes d'interface variabilisés ;
+- messages de lobby et de mission variabilisés ;
+- listes de mots FR / EN ;
+- détection automatique de la langue du client WoW ;
+- switch discret **Langue** dans l'interface : FR / EN.
 
 ## Installation
 
@@ -65,6 +52,10 @@ Puis relancer le jeu ou exécuter :
 7. Les maîtres-espions envoient les indices depuis le panneau **Mission**.
 8. En cas de `/reload`, cliquer sur **Resync** pour demander l’état complet à l’hôte.
 
+## Localisation
+
+Par défaut, le mode **Auto** utilise la langue du client World of Warcraft au lancement. Le bouton discret **Langue** affiche uniquement la langue active, **FR** ou **EN**, et permet de forcer l'une des deux.
+
 ## Commandes
 
 ```txt
@@ -76,14 +67,11 @@ Toutes les actions de lobby et de mission se font depuis l'interface graphique.
 
 ## Notes techniques
 
-Le lobby utilise les messages addon WoW avec le préfixe court `AzAgents`. La synchronisation v0.3 utilise une seed commune pour reconstruire le plateau, puis un masque de 25 caractères pour appliquer les cartes révélées. Le journal et l’indice actif sont aussi envoyés lors d’un resync.
+Le lobby utilise les messages addon WoW avec le préfixe court `AzAgents`. La synchronisation utilise une seed commune pour reconstruire le plateau, puis un masque de 25 caractères pour appliquer les cartes révélées. Le journal et l’indice actif sont aussi envoyés lors d’un resync.
 
 Cette version est pensée pour jouer entre amis. Elle ne cherche pas à empêcher la triche côté client : un addon WoW reste exécuté localement chez chaque joueur.
 
 ## Roadmap
-
-### v0.4 — Localisation
-- traduction FR/EN, avec détection automatique de la langue du client WoW (ou option)
 
 ### v0.5 — Finitions UI
 
@@ -101,4 +89,4 @@ Cette version est pensée pour jouer entre amis. Elle ne cherche pas à empêche
 
 ## Licence / assets
 
-Le projet n’utilise pas d’assets externes dans sa v0.3. L’interface repose sur les templates et primitives UI disponibles dans le client World of Warcraft.
+Le projet n’utilise pas d’assets externes dans sa v0.4. L’interface repose sur les templates et primitives UI disponibles dans le client World of Warcraft.

@@ -1,7 +1,7 @@
 local addonName, AA = ...
 
 AA.name = addonName
-AA.version = "0.3.0"
+AA.version = "0.4.0"
 
 function AA:GetPlayerName()
     local name, realm = UnitFullName("player")
@@ -64,6 +64,10 @@ eventFrame:SetScript("OnEvent", function(_, event)
     AA.DB = AzerothAgentsDB
     AA.localPlayer = AA:GetPlayerName()
 
+    if AA.Locale and AA.Locale.Init then
+        AA.Locale:Init()
+    end
+
     if AA.Game and AA.Game.Init then
         AA.Game:Init()
     end
@@ -80,7 +84,11 @@ eventFrame:SetScript("OnEvent", function(_, event)
         AA.UI:Init()
     end
 
-    AA:Print("v" .. AA.version .. " chargée. Tape /aa pour ouvrir le dossier confidentiel.")
+    if AA.Locale then
+        AA:Print(AA.Locale:T("addonLoaded", AA.version))
+    else
+        AA:Print("v" .. AA.version .. " loaded. Type /aa to open the confidential file.")
+    end
 end)
 
 SLASH_AZEROTHAGENTS1 = "/aa"

@@ -6,6 +6,14 @@ local PREFIX = "AzAgents"
 local VERSION_TAG = "3"
 local initialized = false
 
+local function L(key, ...)
+    if AA.Locale then
+        return AA.Locale:T(key, ...)
+    end
+
+    return key
+end
+
 local function Encode(value)
     value = tostring(value or "")
     value = string.gsub(value, "%%", "%%p")
@@ -104,7 +112,7 @@ function AA.Comm:Send(target, command, ...)
     if not channel then
         if AA.Lobby and AA.Lobby.GetState then
             local lobby = AA.Lobby:GetState()
-            lobby.message = "Mode local : groupe requis pour synchroniser le lobby."
+            lobby.message = L("localModeGroupRequired")
         end
         return false
     end
@@ -171,7 +179,7 @@ function AA.Comm:Handle(text, channel, sender)
     if command == "START" then
         local seed = tonumber(args[1])
         AA.Game:NewGame(seed, false)
-        AA.Game:SetMessage("Mission synchronisée avec l'hôte " .. AA:ShortName(sender) .. ".")
+        AA.Game:SetMessage(L("syncedWithHost", AA:ShortName(sender)))
         if AA.UI then AA.UI:Refresh() end
         return
     end

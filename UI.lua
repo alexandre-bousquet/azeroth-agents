@@ -4,6 +4,11 @@ AA.UI = {}
 
 local CARD_SIZE = 104
 local CARD_GAP = 8
+local SIDE_PANEL_X = 610
+local SIDE_PANEL_WIDTH = 300
+local LOBBY_BUTTON_GAP = 10
+local LOBBY_ACTION_WIDTH = (SIDE_PANEL_WIDTH - LOBBY_BUTTON_GAP) / 2
+local LOBBY_LAUNCH_WIDTH = SIDE_PANEL_WIDTH
 
 local TYPE_COLORS = {
     RED = { 0.62, 0.08, 0.08, 0.92 },
@@ -27,14 +32,30 @@ local ui = {
     title = nil,
     status = nil,
     turnText = nil,
-    spyCheck = nil,
+    boardFrame = nil,
     cards = {},
     statsText = nil,
     lobbyText = nil,
     lobbyStatus = nil,
+    createButton = nil,
+    joinButton = nil,
+    leaveButton = nil,
     readyButton = nil,
+    redButton = nil,
+    blueButton = nil,
+    agentButton = nil,
+    spyRoleButton = nil,
     launchButton = nil,
-    channelText = nil
+    endTurnButton = nil,
+    resetButton = nil,
+    channelText = nil,
+    clueEdit = nil,
+    clueNumberEdit = nil,
+    clueText = nil,
+    clueInputLabel = nil,
+    clueButton = nil,
+    historyText = nil,
+    syncButton = nil
 }
 
 local function ApplyColor(texture, color)
@@ -43,6 +64,30 @@ end
 
 local function SetFontColor(fontString, color)
     fontString:SetTextColor(color[1], color[2], color[3])
+end
+
+local function SetRegionShown(region, shown)
+    if not region then
+        return
+    end
+
+    if shown then
+        region:Show()
+    else
+        region:Hide()
+    end
+end
+
+local function SetButtonEnabled(button, enabled)
+    if not button then
+        return
+    end
+
+    if enabled then
+        button:Enable()
+    else
+        button:Disable()
+    end
 end
 
 local function CreateDivider(parent, y, leftOffset, rightOffset)
@@ -74,6 +119,22 @@ local function CreateButton(parent, text, width, height, point, relativeTo, rela
     button:SetText(text)
     button:SetScript("OnClick", onClick)
     return button
+end
+
+
+local function CreateEditBox(parent, width, height, point, relativeTo, relativePoint, x, y)
+    local edit = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    edit:SetSize(width or 120, height or 24)
+    edit:SetAutoFocus(false)
+    edit:SetText("")
+
+    if relativeTo then
+        edit:SetPoint(point, relativeTo, relativePoint, x or 0, y or 0)
+    else
+        edit:SetPoint(point, x or 0, y or 0)
+    end
+
+    return edit
 end
 
 local function CreateCard(parent, index)
@@ -145,12 +206,11 @@ local function BuildLobbyText()
 
     for _, name in ipairs(names) do
         local player = lobby.players[name]
-        local hostMark = name == lobby.host and "★ " or ""
-        local readyMark = player.ready and "|cff00ff00✓|r" or "|cffff3333✗|r"
+        local readyMark = player.ready and "|cff00ff00Prêt|r" or "|cffff0000Pas prêt|r"
         local team = AA.Game:GetTeamLabel(player.team)
         local role = AA.Lobby:GetRoleLabel(player.role)
 
-        table.insert(lines, hostMark .. AA:ShortName(name) .. " — " .. team .. " / " .. role .. " " .. readyMark)
+        table.insert(lines, AA:ShortName(name) .. " — " .. team .. " / " .. role .. " " .. readyMark)
     end
 
     return table.concat(lines, "\n")
@@ -158,6 +218,15 @@ end
 
 local function RefreshButtons()
     local localPlayer = AA.Lobby and AA.Lobby:GetLocalPlayer() or nil
+    local lobbyActive = AA.Lobby and AA.Lobby.IsActive and AA.Lobby:IsActive()
+
+    if ui.createButton then
+        SetButtonEnabled(ui.createButton, not lobbyActive)
+    end
+
+    if ui.joinButton then
+        SetButtonEnabled(ui.joinButton, not lobbyActive)
+    end
 
     if ui.readyButton then
         if localPlayer and localPlayer.ready then
@@ -168,11 +237,28 @@ local function RefreshButtons()
     end
 
     if ui.launchButton then
-        if AA.Lobby and AA.Lobby:IsHost() then
-            ui.launchButton:Enable()
-        else
-            ui.launchButton:Disable()
-        end
+        local canStart = AA.Lobby and AA.Lobby.CanStartMission and AA.Lobby:CanStartMission()
+        SetButtonEnabled(ui.launchButton, canStart)
+    end
+
+    if ui.redButton then
+        SetButtonEnabled(ui.redButton, not localPlayer or localPlayer.team ~= "RED")
+    end
+
+    if ui.blueButton then
+        SetButtonEnabled(ui.blueButton, not localPlayer or localPlayer.team ~= "BLUE")
+    end
+
+    if ui.agentButton then
+        SetButtonEnabled(ui.agentButton, not localPlayer or localPlayer.role ~= "AGENT")
+    end
+
+    if ui.spyRoleButton then
+        SetButtonEnabled(ui.spyRoleButton, not localPlayer or localPlayer.role ~= "SPYMASTER")
+    end
+
+    if ui.endTurnButton then
+        SetButtonEnabled(ui.endTurnButton, AA.Game and AA.Game.CanLocalRevealCard and AA.Game:CanLocalRevealCard())
     end
 
     if ui.channelText and AA.Comm then
@@ -191,7 +277,7 @@ function AA.UI:Init()
     end
 
     local frame = CreateFrame("Frame", "AzerothAgentsFrame", UIParent, "BasicFrameTemplateWithInset")
-    frame:SetSize(940, 705)
+    frame:SetSize(940, 760)
     frame:SetPoint("CENTER")
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -223,15 +309,15 @@ function AA.UI:Init()
     ui.status:SetJustifyH("LEFT")
     ui.status:SetText("Dossier SI:7 en attente. Crée ou rejoins un lobby.")
 
-    local boardFrame = CreateFrame("Frame", nil, frame)
+    ui.boardFrame = CreateFrame("Frame", nil, frame)
     local boardSize = (AA.Game.GRID_SIZE * CARD_SIZE) + ((AA.Game.GRID_SIZE - 1) * CARD_GAP)
-    boardFrame:SetSize(boardSize, boardSize)
-    boardFrame:SetPoint("TOPLEFT", 24, -120)
+    ui.boardFrame:SetSize(boardSize, boardSize)
+    ui.boardFrame:SetPoint("TOPLEFT", 24, -120)
 
     for row = 1, AA.Game.GRID_SIZE do
         for col = 1, AA.Game.GRID_SIZE do
             local index = ((row - 1) * AA.Game.GRID_SIZE) + col
-            local card = CreateCard(boardFrame, index)
+            local card = CreateCard(ui.boardFrame, index)
 
             card:SetPoint(
                 "TOPLEFT",
@@ -243,88 +329,127 @@ function AA.UI:Init()
         end
     end
 
-    CreatePanelTitle(frame, "Lobby groupe", 610, -70)
+    CreatePanelTitle(frame, "Lobby groupe", SIDE_PANEL_X, -70)
 
     ui.lobbyStatus = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ui.lobbyStatus:SetPoint("TOPLEFT", 610, -92)
-    ui.lobbyStatus:SetWidth(295)
+    ui.lobbyStatus:SetPoint("TOPLEFT", SIDE_PANEL_X, -92)
+    ui.lobbyStatus:SetWidth(SIDE_PANEL_WIDTH)
     ui.lobbyStatus:SetJustifyH("LEFT")
     ui.lobbyStatus:SetText("Aucun lobby actif.")
 
-    local createButton = CreateButton(frame, "Créer lobby", 132, 26, "TOPLEFT", nil, nil, 610, -130, function()
+    ui.createButton = CreateButton(frame, "Créer lobby", LOBBY_ACTION_WIDTH, 26, "TOPLEFT", nil, nil, SIDE_PANEL_X, -130, function()
         AA.Lobby:Create()
     end)
 
-    local joinButton = CreateButton(frame, "Rejoindre", 132, 26, "LEFT", createButton, "RIGHT", 10, 0, function()
+    ui.joinButton = CreateButton(frame, "Rejoindre", LOBBY_ACTION_WIDTH, 26, "LEFT", ui.createButton, "RIGHT", LOBBY_BUTTON_GAP, 0, function()
         AA.Lobby:Join()
     end)
 
-    local leaveButton = CreateButton(frame, "Quitter", 132, 26, "TOPLEFT", nil, nil, 610, -162, function()
+    ui.leaveButton = CreateButton(frame, "Quitter", LOBBY_ACTION_WIDTH, 26, "TOPLEFT", ui.createButton, "BOTTOMLEFT", 0, -6, function()
         AA.Lobby:Leave()
     end)
 
-    ui.readyButton = CreateButton(frame, "Prêt", 132, 26, "LEFT", leaveButton, "RIGHT", 10, 0, function()
+    ui.readyButton = CreateButton(frame, "Prêt", LOBBY_ACTION_WIDTH, 26, "LEFT", ui.leaveButton, "RIGHT", LOBBY_BUTTON_GAP, 0, function()
         AA.Lobby:ToggleReady()
     end)
 
-    local redButton = CreateButton(frame, "Rouge", 86, 24, "TOPLEFT", nil, nil, 610, -204, function()
+    ui.redButton = CreateButton(frame, "Rouge", LOBBY_ACTION_WIDTH, 24, "TOPLEFT", ui.leaveButton, "BOTTOMLEFT", 0, -16, function()
         AA.Lobby:SetTeam("RED")
     end)
 
-    local blueButton = CreateButton(frame, "Bleu", 86, 24, "LEFT", redButton, "RIGHT", 8, 0, function()
+    ui.blueButton = CreateButton(frame, "Bleu", LOBBY_ACTION_WIDTH, 24, "LEFT", ui.redButton, "RIGHT", LOBBY_BUTTON_GAP, 0, function()
         AA.Lobby:SetTeam("BLUE")
     end)
 
-    local agentButton = CreateButton(frame, "Agent", 86, 24, "LEFT", blueButton, "RIGHT", 8, 0, function()
-        AA.Lobby:SetRole("AGENT")
-    end)
-
-    local spyRoleButton = CreateButton(frame, "Espion", 86, 24, "TOPLEFT", nil, nil, 610, -232, function()
+    ui.spyRoleButton = CreateButton(frame, "Espion", LOBBY_ACTION_WIDTH, 24, "TOPLEFT", ui.redButton, "BOTTOMLEFT", 0, -4, function()
         AA.Lobby:SetRole("SPYMASTER")
     end)
 
-    ui.launchButton = CreateButton(frame, "Lancer mission", 178, 28, "LEFT", spyRoleButton, "RIGHT", 10, 0, function()
+    ui.agentButton = CreateButton(frame, "Agent", LOBBY_ACTION_WIDTH, 24, "LEFT", ui.spyRoleButton, "RIGHT", LOBBY_BUTTON_GAP, 0, function()
+        AA.Lobby:SetRole("AGENT")
+    end)
+
+    ui.launchButton = CreateButton(frame, "Lancer mission", LOBBY_LAUNCH_WIDTH, 28, "TOPLEFT", ui.spyRoleButton, "BOTTOMLEFT", 0, -6, function()
         AA.Lobby:StartMission()
     end)
 
-    CreateDivider(frame, -275, 610, -30)
-    CreatePanelTitle(frame, "Mission", 610, -292)
+    CreateDivider(frame, -302, 610, -30)
+    CreatePanelTitle(frame, "Mission", 610, -319)
 
-    local endTurnButton = CreateButton(frame, "Passer tour", 132, 26, "TOPLEFT", nil, nil, 610, -320, function()
+    ui.endTurnButton = CreateButton(frame, "Passer tour", 120, 26, "TOPLEFT", nil, nil, 610, -347, function()
         AA.Game:EndTurn(true)
     end)
 
-    local resetButton = CreateButton(frame, "Reset", 132, 26, "LEFT", endTurnButton, "RIGHT", 10, 0, function()
+    ui.resetButton = CreateButton(frame, "Reset", 80, 26, "LEFT", ui.endTurnButton, "RIGHT", 8, 0, function()
         AA.Game:Reset(true)
     end)
 
-    ui.spyCheck = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
-    ui.spyCheck:SetPoint("TOPLEFT", 604, -356)
-    ui.spyCheck.text:SetText("Vue maître-espion locale")
-    ui.spyCheck:SetScript("OnClick", function(self)
-        AA.Game:SetSpyMode(self:GetChecked())
-        AA.UI:Refresh()
+    ui.syncButton = CreateButton(frame, "Resync", 90, 26, "LEFT", ui.resetButton, "RIGHT", 8, 0, function()
+        AA.Lobby:RequestResync()
+    end)
+
+    ui.clueText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ui.clueText:SetPoint("TOPLEFT", 610, -381)
+    ui.clueText:SetWidth(300)
+    ui.clueText:SetJustifyH("LEFT")
+    ui.clueText:SetText("Aucun indice actif.")
+
+    ui.clueInputLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ui.clueInputLabel:SetPoint("TOPLEFT", 610, -409)
+    ui.clueInputLabel:SetWidth(300)
+    ui.clueInputLabel:SetJustifyH("LEFT")
+    ui.clueInputLabel:SetText("Donner un indice")
+
+    ui.clueEdit = CreateEditBox(frame, 156, 24, "TOPLEFT", nil, nil, 610, -431)
+    ui.clueEdit:SetMaxLetters(24)
+
+    ui.clueNumberEdit = CreateEditBox(frame, 42, 24, "LEFT", ui.clueEdit, "RIGHT", 8, 0)
+    ui.clueNumberEdit:SetMaxLetters(2)
+    if ui.clueNumberEdit.SetNumeric then
+        ui.clueNumberEdit:SetNumeric(true)
+    end
+
+    ui.clueButton = CreateButton(frame, "Indice", 86, 24, "LEFT", ui.clueNumberEdit, "RIGHT", 8, 0, function()
+        local word = ui.clueEdit:GetText()
+        local number = ui.clueNumberEdit:GetText()
+
+        if AA.Game:SubmitClue(word, number, true) then
+            ui.clueEdit:SetText("")
+            ui.clueNumberEdit:SetText("")
+            ui.clueEdit:ClearFocus()
+            ui.clueNumberEdit:ClearFocus()
+        end
     end)
 
     ui.channelText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    ui.channelText:SetPoint("TOPLEFT", 610, -388)
-    ui.channelText:SetWidth(295)
+    ui.channelText:SetPoint("TOPLEFT", 610, -477)
+    ui.channelText:SetWidth(SIDE_PANEL_WIDTH)
     ui.channelText:SetJustifyH("LEFT")
     ui.channelText:SetText("Canal addon : local")
 
-    CreateDivider(frame, -420, 610, -30)
-    CreatePanelTitle(frame, "Agents", 610, -438)
+    CreateDivider(frame, -507, 610, -30)
+    CreatePanelTitle(frame, "Agents", 610, -525)
 
     ui.lobbyText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ui.lobbyText:SetPoint("TOPLEFT", 610, -462)
+    ui.lobbyText:SetPoint("TOPLEFT", 610, -549)
     ui.lobbyText:SetWidth(300)
     ui.lobbyText:SetJustifyH("LEFT")
     ui.lobbyText:SetJustifyV("TOP")
     ui.lobbyText:SetText(BuildLobbyText())
 
+    CreateDivider(frame, -610, 610, -30)
+    CreatePanelTitle(frame, "Journal", 610, -628)
+
+    ui.historyText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    ui.historyText:SetPoint("TOPLEFT", 610, -652)
+    ui.historyText:SetWidth(300)
+    ui.historyText:SetJustifyH("LEFT")
+    ui.historyText:SetJustifyV("TOP")
+    ui.historyText:SetText("Aucun événement consigné.")
+
     ui.statsText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     ui.statsText:SetPoint("BOTTOM", 0, 14)
-    ui.statsText:SetText("v" .. (AA.version or "0.2.3"))
+    ui.statsText:SetText("v" .. (AA.version or "0.3.0"))
 
     self:Refresh()
 end
@@ -354,13 +479,52 @@ function AA.UI:Refresh()
         ui.lobbyText:SetText(BuildLobbyText())
     end
 
-    if ui.spyCheck then
-        ui.spyCheck:SetChecked(game.spyMode)
+    SetRegionShown(ui.boardFrame, game.phase ~= "LOBBY")
+
+    local showLobbySetup = game.phase ~= "PLAYING"
+    SetRegionShown(ui.createButton, showLobbySetup)
+    SetRegionShown(ui.joinButton, showLobbySetup)
+    SetRegionShown(ui.leaveButton, true)
+    SetRegionShown(ui.readyButton, showLobbySetup)
+    SetRegionShown(ui.redButton, showLobbySetup)
+    SetRegionShown(ui.blueButton, showLobbySetup)
+    SetRegionShown(ui.agentButton, showLobbySetup)
+    SetRegionShown(ui.spyRoleButton, showLobbySetup)
+    SetRegionShown(ui.launchButton, showLobbySetup)
+    SetRegionShown(ui.endTurnButton, game.phase == "PLAYING")
+    SetRegionShown(ui.resetButton, game.phase == "ENDED")
+    SetRegionShown(ui.syncButton, true)
+
+    if ui.clueText then
+        ui.clueText:SetText(AA.Game:GetCurrentClueText())
+    end
+
+    local showCurrentClue = game.phase == "PLAYING"
+    local showClueInput = showCurrentClue and AA.Game:CanLocalSubmitClue()
+    SetRegionShown(ui.clueText, showCurrentClue)
+    SetRegionShown(ui.clueInputLabel, showClueInput)
+    SetRegionShown(ui.clueEdit, showClueInput)
+    SetRegionShown(ui.clueNumberEdit, showClueInput)
+    SetRegionShown(ui.clueButton, showClueInput)
+
+    if not showClueInput then
+        if ui.clueEdit then
+            ui.clueEdit:ClearFocus()
+        end
+
+        if ui.clueNumberEdit then
+            ui.clueNumberEdit:ClearFocus()
+        end
+    end
+
+    if ui.historyText then
+        ui.historyText:SetText(AA.Game:GetHistoryText())
     end
 
     RefreshButtons()
 
     local canSeeIdentities = AA.Game:CanSeeIdentities()
+    local canRevealCard = AA.Game:CanLocalRevealCard()
 
     for index, button in ipairs(ui.cards) do
         local card = game.board[index]
@@ -371,7 +535,11 @@ function AA.UI:Refresh()
             SetFontColor(button.text, TYPE_TEXT_COLORS.HIDDEN)
             button:Disable()
         else
-            button:Enable()
+            if card.revealed or not canRevealCard then
+                button:Disable()
+            else
+                button:Enable()
+            end
 
             local visibleType = card.revealed or canSeeIdentities
             local color = visibleType and TYPE_COLORS[card.type] or TYPE_COLORS.HIDDEN

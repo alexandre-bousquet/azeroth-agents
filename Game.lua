@@ -6,6 +6,7 @@ local GRID_SIZE = 5
 local CARD_COUNT = GRID_SIZE * GRID_SIZE
 local RNG_MOD = 2147483647
 local RNG_MULT = 48271
+local HISTORY_LIMIT = 12
 
 local TYPE_LABELS = {
     RED = "Rouge",
@@ -19,10 +20,11 @@ local state = {
     board = {},
     turn = "RED",
     startTeam = "RED",
-    spyMode = false,
     message = "Dossier SI:7 en attente. Crée ou rejoins un lobby.",
     winner = nil,
-    seed = nil
+    seed = nil,
+    history = {},
+    currentClue = nil
 }
 
 AA.Game.GRID_SIZE = GRID_SIZE
@@ -32,7 +34,7 @@ AA.Game.TYPE_LABELS = TYPE_LABELS
 local function CopyArray(source)
     local result = {}
 
-    for i = 1, #source do
+    for i = 1, #(source or {}) do
         result[i] = source[i]
     end
 
@@ -128,14 +130,94 @@ local function BuildTypes(rng)
     return types, startTeam
 end
 
+local function BuildBoard(seed)
+    local rng = NewRng(seed)
+    local words = PickWords(rng)
+    local types, startTeam = BuildTypes(rng)
+    local board = {}
+
+    for i = 1, CARD_COUNT do
+        board[i] = {
+            word = words[i],
+            type = types[i],
+            revealed = false
+        }
+    end
+
+    return board, startTeam
+end
+
 local function Refresh()
     if AA.UI and AA.UI.Refresh then
         AA.UI:Refresh()
     end
 end
 
+local function GetRevealedMask()
+    local mask = {}
+
+    for i = 1, CARD_COUNT do
+        local card = state.board[i]
+        mask[i] = card and card.revealed and "1" or "0"
+    end
+
+    return table.concat(mask)
+end
+
+local function ApplyRevealedMask(mask)
+    mask = tostring(mask or "")
+
+    for i = 1, CARD_COUNT do
+        if state.board[i] then
+            state.board[i].revealed = string.sub(mask, i, i) == "1"
+        end
+    end
+end
+
+local function SaveSnapshot()
+    if not AA.DB then
+        return
+    end
+
+    if state.phase == "LOBBY" and not state.seed then
+        AA.DB.lastGame = nil
+        return
+    end
+
+    AA.DB.lastGame = {
+        phase = state.phase,
+        seed = state.seed,
+        turn = state.turn,
+        startTeam = state.startTeam,
+        winner = state.winner,
+        revealed = GetRevealedMask(),
+        history = CopyArray(state.history),
+        currentClue = state.currentClue and {
+            word = state.currentClue.word,
+            number = state.currentClue.number,
+            team = state.currentClue.team,
+            sender = state.currentClue.sender
+        } or nil
+    }
+end
+
+local function AddHistoryLine(line)
+    line = tostring(line or "")
+
+    if line == "" then
+        return
+    end
+
+    table.insert(state.history, 1, line)
+
+    while #state.history > HISTORY_LIMIT do
+        table.remove(state.history)
+    end
+end
+
 function AA.Game:Init()
     math.randomseed(time() + math.floor((GetTime() or 0) * 1000))
+    self:LoadSnapshot()
 end
 
 function AA.Game:GetState()
@@ -150,6 +232,56 @@ function AA.Game:SetMessage(message)
     state.message = message
 end
 
+function AA.Game:GetCurrentClueText()
+    local clue = state.currentClue
+
+    if not clue or not clue.word or clue.word == "" then
+        return "Aucun indice actif."
+    end
+
+    return "Indice " .. GetTeamLabel(clue.team) .. " : " .. clue.word .. " / " .. tostring(clue.number or "?")
+end
+
+function AA.Game:GetHistoryText()
+    if not state.history or #state.history == 0 then
+        return "Aucun événement consigné."
+    end
+
+    local lines = {}
+
+    for i = 1, math.min(#state.history, 7) do
+        table.insert(lines, state.history[i])
+    end
+
+    return table.concat(lines, "\n")
+end
+
+function AA.Game:SaveSnapshot()
+    SaveSnapshot()
+end
+
+function AA.Game:LoadSnapshot()
+    local saved = AA.DB and AA.DB.lastGame
+
+    if not saved or not saved.seed then
+        return false
+    end
+
+    state.seed = tonumber(saved.seed)
+    state.board, state.startTeam = BuildBoard(state.seed)
+    state.phase = saved.phase or "PLAYING"
+    state.turn = saved.turn or state.startTeam or "RED"
+    state.startTeam = saved.startTeam or state.startTeam or "RED"
+    state.winner = saved.winner
+    state.history = CopyArray(saved.history or {})
+    state.currentClue = saved.currentClue
+
+    ApplyRevealedMask(saved.revealed or "")
+
+    state.message = "Dossier restauré depuis la cache locale. Clique Resync si besoin."
+    return true
+end
+
 function AA.Game:Reset(shouldBroadcast)
     state.phase = "LOBBY"
     state.board = {}
@@ -157,7 +289,13 @@ function AA.Game:Reset(shouldBroadcast)
     state.startTeam = "RED"
     state.winner = nil
     state.seed = nil
+    state.history = {}
+    state.currentClue = nil
     state.message = "Dossier SI:7 réinitialisé. Crée ou rejoins un lobby."
+
+    if AA.DB then
+        AA.DB.lastGame = nil
+    end
 
     if shouldBroadcast and AA.Comm then
         AA.Comm:Broadcast("RESET")
@@ -169,29 +307,22 @@ end
 function AA.Game:NewGame(seed, shouldBroadcast)
     seed = tonumber(seed) or GenerateSeed()
 
-    local rng = NewRng(seed)
-    local words = PickWords(rng)
-    local types, startTeam = BuildTypes(rng)
-
-    state.phase = "PLAYING"
-    state.board = {}
-    state.startTeam = startTeam
-    state.turn = startTeam
-    state.winner = nil
     state.seed = seed
-    state.message = "Mission lancée. L'équipe " .. GetTeamLabel(startTeam) .. " commence."
+    state.board, state.startTeam = BuildBoard(seed)
+    state.phase = "PLAYING"
+    state.turn = state.startTeam
+    state.winner = nil
+    state.history = {}
+    state.currentClue = nil
+    state.message = "Mission lancée. L'équipe " .. GetTeamLabel(state.startTeam) .. " commence."
 
-    for i = 1, CARD_COUNT do
-        state.board[i] = {
-            word = words[i],
-            type = types[i],
-            revealed = false
-        }
-    end
+    AddHistoryLine("Mission ouverte — " .. GetTeamLabel(state.startTeam) .. " commence.")
 
     if AA.DB and AA.DB.stats and shouldBroadcast then
         AA.DB.stats.gamesStarted = (AA.DB.stats.gamesStarted or 0) + 1
     end
+
+    SaveSnapshot()
 
     if shouldBroadcast and AA.Comm then
         AA.Comm:Broadcast("START", tostring(seed))
@@ -200,27 +331,33 @@ function AA.Game:NewGame(seed, shouldBroadcast)
     Refresh()
 end
 
-function AA.Game:ToggleSpyMode()
-    state.spyMode = not state.spyMode
-
-    if state.spyMode then
-        state.message = "Vue maître-espion active localement. Les identités sont visibles."
-    else
-        state.message = "Vue agent active localement. Les identités sont masquées."
-    end
-end
-
-function AA.Game:SetSpyMode(enabled)
-    state.spyMode = enabled and true or false
-end
-
 function AA.Game:CanSeeIdentities()
-    if state.spyMode then
-        return true
-    end
-
     if AA.Lobby and AA.Lobby.IsLocalSpymaster then
         return AA.Lobby:IsLocalSpymaster()
+    end
+
+    return false
+end
+
+function AA.Game:CanLocalRevealCard()
+    if state.phase ~= "PLAYING" then
+        return false
+    end
+
+    if AA.Lobby and AA.Lobby.IsLocalTurnAgent then
+        return AA.Lobby:IsLocalTurnAgent(state.turn)
+    end
+
+    return false
+end
+
+function AA.Game:CanLocalSubmitClue()
+    if state.phase ~= "PLAYING" then
+        return false
+    end
+
+    if AA.Lobby and AA.Lobby.IsLocalTurnSpymaster then
+        return AA.Lobby:IsLocalTurnSpymaster(state.turn)
     end
 
     return false
@@ -245,11 +382,70 @@ function AA.Game:EndTurn(shouldBroadcast)
         return
     end
 
+    if shouldBroadcast and not self:CanLocalRevealCard() then
+        state.message = "Seuls les agents de l'equipe active peuvent passer le tour."
+        Refresh()
+        return
+    end
+
     SwapTurn()
     state.message = "Tour passé. À l'équipe " .. GetTeamLabel(state.turn) .. "."
+    AddHistoryLine("Tour passé — " .. GetTeamLabel(state.turn) .. " joue.")
+    SaveSnapshot()
 
     if shouldBroadcast and AA.Comm then
         AA.Comm:Broadcast("ENDTURN")
+    end
+
+    Refresh()
+end
+
+function AA.Game:SubmitClue(word, number, shouldBroadcast)
+    word = tostring(word or "")
+    word = string.gsub(word, "^%s+", "")
+    word = string.gsub(word, "%s+$", "")
+    number = tonumber(number)
+
+    if state.phase ~= "PLAYING" then
+        state.message = "Aucune mission active pour envoyer un indice."
+        Refresh()
+        return false
+    end
+
+    if shouldBroadcast and not self:CanLocalSubmitClue() then
+        state.message = "Seul le maitre-espion de l'equipe active peut donner un indice."
+        Refresh()
+        return false
+    end
+
+    if word == "" or not number then
+        state.message = "Indice invalide. Format attendu : un mot + un nombre."
+        Refresh()
+        return false
+    end
+
+    self:SetClue(word, number, shouldBroadcast, AA.localPlayer or AA:GetPlayerName(), state.turn)
+    return true
+end
+
+function AA.Game:SetClue(word, number, shouldBroadcast, sender, team)
+    word = tostring(word or "")
+    number = tonumber(number) or tostring(number or "?")
+    team = team or state.turn
+
+    state.currentClue = {
+        word = word,
+        number = number,
+        team = team,
+        sender = sender
+    }
+
+    state.message = "Indice " .. GetTeamLabel(team) .. " : " .. word .. " / " .. tostring(number) .. "."
+    AddHistoryLine("Indice " .. GetTeamLabel(team) .. " — " .. word .. " / " .. tostring(number) .. ".")
+    SaveSnapshot()
+
+    if shouldBroadcast and AA.Comm then
+        AA.Comm:Broadcast("CLUE", word, tostring(number), team)
     end
 
     Refresh()
@@ -260,6 +456,12 @@ function AA.Game:RevealCard(index, shouldBroadcast)
 
     if state.phase ~= "PLAYING" then
         state.message = "Aucune mission active. Lance une nouvelle partie."
+        Refresh()
+        return
+    end
+
+    if shouldBroadcast and not self:CanLocalRevealCard() then
+        state.message = "Seuls les agents de l'equipe active peuvent reveler un mot."
         Refresh()
         return
     end
@@ -286,11 +488,13 @@ function AA.Game:RevealCard(index, shouldBroadcast)
         state.phase = "ENDED"
         state.winner = state.turn == "RED" and "BLUE" or "RED"
         state.message = "Assassin révélé. L'équipe " .. GetTeamLabel(state.turn) .. " est compromise. Victoire " .. GetTeamLabel(state.winner) .. "."
+        AddHistoryLine("Assassin révélé : " .. card.word .. ". Victoire " .. GetTeamLabel(state.winner) .. ".")
 
         if AA.DB and AA.DB.stats and shouldBroadcast then
             AA.DB.stats.assassinReveals = (AA.DB.stats.assassinReveals or 0) + 1
         end
 
+        SaveSnapshot()
         Refresh()
         return
     end
@@ -302,11 +506,13 @@ function AA.Game:RevealCard(index, shouldBroadcast)
         state.phase = "ENDED"
         state.winner = "RED"
         state.message = "Tous les agents rouges sont exfiltrés. Victoire Rouge."
+        AddHistoryLine("Victoire Rouge — dernier contact : " .. card.word .. ".")
 
         if AA.DB and AA.DB.stats and shouldBroadcast then
             AA.DB.stats.redWins = (AA.DB.stats.redWins or 0) + 1
         end
 
+        SaveSnapshot()
         Refresh()
         return
     end
@@ -315,24 +521,112 @@ function AA.Game:RevealCard(index, shouldBroadcast)
         state.phase = "ENDED"
         state.winner = "BLUE"
         state.message = "Tous les agents bleus sont exfiltrés. Victoire Bleue."
+        AddHistoryLine("Victoire Bleue — dernier contact : " .. card.word .. ".")
 
         if AA.DB and AA.DB.stats and shouldBroadcast then
             AA.DB.stats.blueWins = (AA.DB.stats.blueWins or 0) + 1
         end
 
+        SaveSnapshot()
         Refresh()
         return
     end
 
     if card.type == state.turn then
         state.message = "Contact confirmé pour l'équipe " .. GetTeamLabel(state.turn) .. "."
+        AddHistoryLine(card.word .. " révélé — contact " .. GetTeamLabel(card.type) .. ".")
     elseif card.type == "NEUTRAL" then
         SwapTurn()
         state.message = "Contact neutre. Tour de l'équipe " .. GetTeamLabel(state.turn) .. "."
+        AddHistoryLine(card.word .. " révélé — neutre. Tour " .. GetTeamLabel(state.turn) .. ".")
     else
         SwapTurn()
         state.message = "Agent adverse révélé. Tour de l'équipe " .. GetTeamLabel(state.turn) .. "."
+        AddHistoryLine(card.word .. " révélé — agent " .. GetTeamLabel(card.type) .. ". Tour " .. GetTeamLabel(state.turn) .. ".")
     end
 
+    SaveSnapshot()
+    Refresh()
+end
+
+function AA.Game:SendSync(target)
+    if not AA.Comm then
+        return false
+    end
+
+    local clue = state.currentClue or {}
+
+    AA.Comm:Send(target, "SYNCSTATE",
+        tostring(state.seed or ""),
+        state.phase or "LOBBY",
+        state.turn or "RED",
+        state.startTeam or "RED",
+        state.winner or "",
+        GetRevealedMask(),
+        clue.word or "",
+        tostring(clue.number or ""),
+        clue.team or "",
+        clue.sender or ""
+    )
+
+    local total = #state.history
+
+    for i = total, 1, -1 do
+        AA.Comm:Send(target, "SYNCLOG", tostring(i), tostring(total), state.history[i])
+    end
+
+    return true
+end
+
+function AA.Game:ApplySync(args, sender)
+    local seed = tonumber(args[1])
+    local phase = args[2] or "LOBBY"
+
+    if seed then
+        state.seed = seed
+        state.board, state.startTeam = BuildBoard(seed)
+    else
+        state.seed = nil
+        state.board = {}
+    end
+
+    state.phase = phase
+    state.turn = args[3] or state.turn or "RED"
+    state.startTeam = args[4] or state.startTeam or "RED"
+    state.winner = args[5] ~= "" and args[5] or nil
+    ApplyRevealedMask(args[6] or "")
+
+    if args[7] and args[7] ~= "" then
+        state.currentClue = {
+            word = args[7],
+            number = args[8],
+            team = args[9],
+            sender = args[10]
+        }
+    else
+        state.currentClue = nil
+    end
+
+    state.history = {}
+    state.message = "Resync reçue de " .. AA:ShortName(sender) .. "."
+    SaveSnapshot()
+    Refresh()
+end
+
+function AA.Game:ApplySyncLog(index, total, line)
+    index = tonumber(index)
+    total = tonumber(total)
+
+    if not index or not total or not line then
+        return
+    end
+
+    state.history[index] = line
+
+    while #state.history > HISTORY_LIMIT do
+        table.remove(state.history)
+    end
+
+    SaveSnapshot()
     Refresh()
 end

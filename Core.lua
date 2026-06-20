@@ -1,7 +1,7 @@
 local addonName, AA = ...
 
 AA.name = addonName
-AA.version = "0.2.3"
+AA.version = "0.3.0"
 
 function AA:GetPlayerName()
     local name, realm = UnitFullName("player")
@@ -55,7 +55,9 @@ eventFrame:SetScript("OnEvent", function(_, event)
             redWins = 0,
             blueWins = 0,
             assassinReveals = 0
-        }
+        },
+        lastGame = nil,
+        lastLobby = nil
     }
 
     AzerothAgentsDB.stats = AzerothAgentsDB.stats or {}
@@ -81,104 +83,9 @@ eventFrame:SetScript("OnEvent", function(_, event)
     AA:Print("v" .. AA.version .. " chargée. Tape /aa pour ouvrir le dossier confidentiel.")
 end)
 
-local function PrintHelp()
-    AA:Print("Commandes disponibles :")
-    print("/aa - Ouvrir/fermer l'interface")
-    print("/aa lobby - Créer un lobby")
-    print("/aa join - Rejoindre le lobby du groupe")
-    print("/aa start - Lancer la mission, hôte uniquement")
-    print("/aa ready - Basculer prêt/pas prêt")
-    print("/aa red ou /aa blue - Changer d'équipe")
-    print("/aa agent ou /aa spyrole - Changer de rôle")
-    print("/aa new - Nouvelle mission locale")
-    print("/aa spy - Activer/désactiver la vue maître-espion locale")
-    print("/aa reset - Réinitialiser le plateau")
-end
-
 SLASH_AZEROTHAGENTS1 = "/aa"
 SLASH_AZEROTHAGENTS2 = "/agents"
 
-SlashCmdList["AZEROTHAGENTS"] = function(msg)
-    msg = string.lower(msg or "")
-    msg = string.gsub(msg, "^%s+", "")
-    msg = string.gsub(msg, "%s+$", "")
-
-    if msg == "help" or msg == "aide" then
-        PrintHelp()
-        return
-    end
-
-    if msg == "lobby" or msg == "host" or msg == "create" then
-        AA.Lobby:Create()
-        AA.UI:Show()
-        return
-    end
-
-    if msg == "join" or msg == "rejoindre" then
-        AA.Lobby:Join()
-        AA.UI:Show()
-        return
-    end
-
-    if msg == "leave" or msg == "quit" or msg == "quitter" then
-        AA.Lobby:Leave()
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "ready" or msg == "pret" or msg == "prêt" then
-        AA.Lobby:ToggleReady()
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "red" or msg == "rouge" then
-        AA.Lobby:SetTeam("RED")
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "blue" or msg == "bleu" then
-        AA.Lobby:SetTeam("BLUE")
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "agent" then
-        AA.Lobby:SetRole("AGENT")
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "spyrole" or msg == "maitre" or msg == "maître" then
-        AA.Lobby:SetRole("SPYMASTER")
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "start" or msg == "lancer" then
-        AA.Lobby:StartMission()
-        AA.UI:Show()
-        return
-    end
-
-    if msg == "new" or msg == "nouveau" then
-        AA.Game:NewGame(nil, true)
-        AA.UI:Show()
-        return
-    end
-
-    if msg == "spy" or msg == "espion" then
-        AA.Game:ToggleSpyMode()
-        AA.UI:Refresh()
-        return
-    end
-
-    if msg == "reset" then
-        AA.Game:Reset(true)
-        AA.UI:Refresh()
-        return
-    end
-
+SlashCmdList["AZEROTHAGENTS"] = function()
     AA.UI:Toggle()
 end

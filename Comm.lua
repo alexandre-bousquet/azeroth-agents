@@ -3,7 +3,7 @@ local addonName, AA = ...
 AA.Comm = {}
 
 local PREFIX = "AzAgents"
-local VERSION_TAG = "2"
+local VERSION_TAG = "3"
 local initialized = false
 
 local function Encode(value)
@@ -91,9 +91,15 @@ function AA.Comm:Init()
     self.frame = frame
 end
 
-function AA.Comm:Broadcast(command, ...)
-    local channel = self:GetChannel()
+function AA.Comm:Send(target, command, ...)
     local payload = BuildPayload(command, ...)
+
+    if target and target ~= "" then
+        C_ChatInfo.SendAddonMessage(PREFIX, payload, "WHISPER", target)
+        return true
+    end
+
+    local channel = self:GetChannel()
 
     if not channel then
         if AA.Lobby and AA.Lobby.GetState then
@@ -105,6 +111,10 @@ function AA.Comm:Broadcast(command, ...)
 
     C_ChatInfo.SendAddonMessage(PREFIX, payload, channel)
     return true
+end
+
+function AA.Comm:Broadcast(command, ...)
+    return self:Send(nil, command, ...)
 end
 
 function AA.Comm:Handle(text, channel, sender)
@@ -128,6 +138,30 @@ function AA.Comm:Handle(text, channel, sender)
 
     for i = 3, #parts do
         table.insert(args, parts[i])
+    end
+
+    if command == "SYNCREQ" then
+        if AA.Lobby and AA.Lobby.IsHost and AA.Lobby:IsHost() then
+            AA.Lobby:BroadcastState(sender)
+            if AA.Game and AA.Game.SendSync then
+                AA.Game:SendSync(sender)
+            end
+        end
+        return
+    end
+
+    if command == "SYNCSTATE" then
+        if AA.Game and AA.Game.ApplySync then
+            AA.Game:ApplySync(args, sender)
+        end
+        return
+    end
+
+    if command == "SYNCLOG" then
+        if AA.Game and AA.Game.ApplySyncLog then
+            AA.Game:ApplySyncLog(args[1], args[2], args[3])
+        end
+        return
     end
 
     if AA.Lobby then
@@ -154,6 +188,11 @@ function AA.Comm:Handle(text, channel, sender)
 
     if command == "RESET" then
         AA.Game:Reset(false)
+        return
+    end
+
+    if command == "CLUE" then
+        AA.Game:SetClue(args[1], args[2], false, sender, args[3])
         return
     end
 end

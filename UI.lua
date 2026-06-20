@@ -375,7 +375,11 @@ function AA.UI:Init()
         if AA.Locale then
             AA.Locale:CycleMode()
             AA.Words = AA.Locale:GetWords()
-            AA.UI:Refresh()
+            if AA.Game and AA.Game.RefreshWords then
+                AA.Game:RefreshWords()
+            else
+                AA.UI:Refresh()
+            end
         end
     end)
 
@@ -531,7 +535,7 @@ function AA.UI:Init()
 
     ui.statsText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     ui.statsText:SetPoint("BOTTOM", 0, 14)
-    ui.statsText:SetText(L("versionText", AA.version or "0.4.1"))
+    ui.statsText:SetText(L("versionText", AA.version or "0.4.2"))
 
     self:Refresh()
 end

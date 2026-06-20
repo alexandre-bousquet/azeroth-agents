@@ -104,13 +104,24 @@ end
 
 local function PickWords(rng)
     local source = AA.Locale and AA.Locale:GetWords() or AA.Words or {}
-    local pool = CopyArray(source)
+    local pool = {}
+
+    for i = 1, #source do
+        pool[i] = {
+            index = i,
+            word = source[i]
+        }
+    end
+
     Shuffle(pool, rng)
 
     local selected = {}
 
     for i = 1, CARD_COUNT do
-        selected[i] = pool[i] or ("WORD " .. i)
+        selected[i] = pool[i] or {
+            index = i,
+            word = "WORD " .. i
+        }
     end
 
     return selected
@@ -147,13 +158,56 @@ local function BuildBoard(seed)
 
     for i = 1, CARD_COUNT do
         board[i] = {
-            word = words[i],
+            word = words[i].word,
+            wordIndex = words[i].index,
             type = types[i],
             revealed = false
         }
     end
 
     return board, startTeam
+end
+
+local function RefreshBoardWords()
+    if not state.seed or not state.board then
+        return
+    end
+
+    local source = AA.Locale and AA.Locale:GetWords() or AA.Words or {}
+    local missingIndexes = false
+
+    for i = 1, CARD_COUNT do
+        local card = state.board[i]
+
+        if card and not card.wordIndex then
+            missingIndexes = true
+            break
+        end
+    end
+
+    if missingIndexes then
+        local rng = NewRng(state.seed)
+        local words = PickWords(rng)
+
+        for i = 1, CARD_COUNT do
+            local card = state.board[i]
+
+            if card and words[i] then
+                card.wordIndex = words[i].index
+                card.word = words[i].word
+            end
+        end
+
+        return
+    end
+
+    for i = 1, CARD_COUNT do
+        local card = state.board[i]
+
+        if card then
+            card.word = source[card.wordIndex] or card.word
+        end
+    end
 end
 
 local function Refresh()
@@ -256,6 +310,11 @@ end
 
 function AA.Game:GetTeamLabel(team)
     return GetTeamLabel(team)
+end
+
+function AA.Game:RefreshWords()
+    RefreshBoardWords()
+    Refresh()
 end
 
 function AA.Game:SetMessage(message)

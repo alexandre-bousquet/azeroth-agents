@@ -110,7 +110,9 @@ function AA.Comm:Send(target, command, ...)
     local channel = self:GetChannel()
 
     if not channel then
-        if AA.Lobby and AA.Lobby.GetState then
+        if AA.Lobby and AA.Lobby.SetMessage then
+            AA.Lobby:SetMessage("localModeGroupRequired")
+        elseif AA.Lobby and AA.Lobby.GetState then
             local lobby = AA.Lobby:GetState()
             lobby.message = L("localModeGroupRequired")
         end
@@ -179,7 +181,11 @@ function AA.Comm:Handle(text, channel, sender)
     if command == "START" then
         local seed = tonumber(args[1])
         AA.Game:NewGame(seed, false)
-        AA.Game:SetMessage(L("syncedWithHost", AA:ShortName(sender)))
+        if AA.Game.SetMessageKey then
+            AA.Game:SetMessageKey("syncedWithHost", AA:ShortName(sender))
+        else
+            AA.Game:SetMessage(L("syncedWithHost", AA:ShortName(sender)))
+        end
         if AA.UI then AA.UI:Refresh() end
         return
     end

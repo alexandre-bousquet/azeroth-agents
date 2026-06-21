@@ -11,7 +11,9 @@ local state = {
     active = false,
     host = nil,
     players = {},
-    message = nil
+    message = nil,
+    messageKey = nil,
+    messageArgs = nil
 }
 
 local function L(key, ...)
@@ -22,6 +24,44 @@ local function L(key, ...)
     return key
 end
 
+local function ResolveMessageArg(arg)
+    if type(arg) == "function" then
+        return arg()
+    end
+
+    return arg
+end
+
+local function FormatMessage(key, args)
+    args = args or {}
+    local resolved = {}
+
+    for i = 1, #args do
+        resolved[i] = ResolveMessageArg(args[i])
+    end
+
+    if #resolved == 0 then
+        return L(key)
+    end
+
+    if #resolved == 1 then
+        return L(key, resolved[1])
+    end
+
+    if #resolved == 2 then
+        return L(key, resolved[1], resolved[2])
+    end
+
+    return L(key, resolved[1], resolved[2], resolved[3])
+end
+
+local function SetMessage(key, ...)
+    local args = { ... }
+
+    state.messageKey = key
+    state.messageArgs = args
+    state.message = FormatMessage(key, args)
+end
 
 local function CopyPlayers(source)
     local result = {}
@@ -130,6 +170,10 @@ local function HasSpymaster(team)
     return false
 end
 
+local function HasGroupChannel()
+    return AA.Comm and AA.Comm.GetChannel and AA.Comm:GetChannel() ~= nil
+end
+
 function AA.Lobby:Init()
     state.players = state.players or {}
 
@@ -139,14 +183,26 @@ function AA.Lobby:Init()
         state.active = saved.active
         state.host = saved.host
         state.players = CopyPlayers(saved.players or {})
-        state.message = L("lobbyRestored")
+        SetMessage("lobbyRestored")
     else
-        state.message = L("noLobby")
+        SetMessage("noLobby")
     end
 end
 
 function AA.Lobby:GetState()
     return state
+end
+
+function AA.Lobby:GetMessage()
+    if state.messageKey then
+        return FormatMessage(state.messageKey, state.messageArgs)
+    end
+
+    return state.message or L("noLobby")
+end
+
+function AA.Lobby:SetMessage(key, ...)
+    SetMessage(key, ...)
 end
 
 function AA.Lobby:GetRoleLabel(role)
@@ -156,6 +212,10 @@ end
 
 function AA.Lobby:IsActive()
     return state.active
+end
+
+function AA.Lobby:CanUseGroupLobby()
+    return HasGroupChannel()
 end
 
 function AA.Lobby:IsHost()
@@ -202,16 +262,16 @@ function AA.Lobby:RequestResync()
         if AA.Game and AA.Game.SendSync then
             AA.Game:SendSync(nil)
         end
-        state.message = L("stateSent")
+        SetMessage("stateSent")
         Refresh()
         return
     end
 
     if AA.Comm then
         AA.Comm:Broadcast("SYNCREQ", LocalName())
-        state.message = L("resyncRequested")
+        SetMessage("resyncRequested")
     else
-        state.message = L("addonChannelUnavailable")
+        SetMessage("addonChannelUnavailable")
     end
 
     Refresh()
@@ -219,6 +279,12 @@ end
 
 function AA.Lobby:Create()
     local me = LocalName()
+
+    if not HasGroupChannel() then
+        SetMessage("localModeGroupRequired")
+        Refresh()
+        return
+    end
 
     state.active = true
     state.host = me
@@ -229,7 +295,7 @@ function AA.Lobby:Create()
     player.role = "SPYMASTER"
     player.ready = true
 
-    state.message = L("lobbyCreated")
+    SetMessage("lobbyCreated")
     AA.Game:Reset(false)
 
     if AA.Comm then
@@ -243,8 +309,14 @@ end
 function AA.Lobby:Join()
     local me = LocalName()
 
+    if not HasGroupChannel() then
+        SetMessage("localModeGroupRequired")
+        Refresh()
+        return
+    end
+
     if state.active then
-        state.message = L("alreadyInLobby")
+        SetMessage("alreadyInLobby")
         Refresh()
         return
     end
@@ -257,7 +329,7 @@ function AA.Lobby:Join()
     player.role = player.role or "AGENT"
     player.ready = false
 
-    state.message = L("joinRequested")
+    SetMessage("joinRequested")
 
     if AA.Comm then
         AA.Comm:Broadcast("JOIN", me)
@@ -272,7 +344,7 @@ function AA.Lobby:Leave()
     local me = LocalName()
 
     if not state.active then
-        state.message = L("noLobby")
+        SetMessage("noLobby")
         Refresh()
         return
     end
@@ -284,7 +356,7 @@ function AA.Lobby:Leave()
     state.active = false
     state.host = nil
     state.players = {}
-    state.message = L("lobbyLeft")
+    SetMessage("lobbyLeft")
     AA.Game:Reset(false)
     Refresh()
 end
@@ -295,7 +367,7 @@ function AA.Lobby:SetTeam(team)
     end
 
     if AA.Game and AA.Game.GetState and AA.Game:GetState().phase == "PLAYING" then
-        state.message = L("teamChangeDuringMission")
+        SetMessage("teamChangeDuringMission")
         Refresh()
         return
     end
@@ -303,7 +375,9 @@ function AA.Lobby:SetTeam(team)
     local player = EnsurePlayer(LocalName())
     player.team = team
     player.ready = false
-    state.message = L("teamUpdated", AA.Game:GetTeamLabel(team))
+    SetMessage("teamUpdated", function()
+        return AA.Game:GetTeamLabel(team)
+    end)
 
     BroadcastPlayer(player.name)
     Refresh()
@@ -315,7 +389,7 @@ function AA.Lobby:SetRole(role)
     end
 
     if AA.Game and AA.Game.GetState and AA.Game:GetState().phase == "PLAYING" then
-        state.message = L("roleChangeDuringMission")
+        SetMessage("roleChangeDuringMission")
         Refresh()
         return
     end
@@ -323,14 +397,18 @@ function AA.Lobby:SetRole(role)
     local player = EnsurePlayer(LocalName())
 
     if player.role == role then
-        state.message = L("roleAlreadySelected", self:GetRoleLabel(role))
+        SetMessage("roleAlreadySelected", function()
+            return self:GetRoleLabel(role)
+        end)
         Refresh()
         return
     end
 
     player.role = role
     player.ready = false
-    state.message = L("roleUpdated", self:GetRoleLabel(role))
+    SetMessage("roleUpdated", function()
+        return self:GetRoleLabel(role)
+    end)
 
     BroadcastPlayer(player.name)
     Refresh()
@@ -338,20 +416,20 @@ end
 
 function AA.Lobby:SetReady(ready)
     if not state.active then
-        state.message = L("needLobbyReady")
+        SetMessage("needLobbyReady")
         Refresh()
         return
     end
 
     if AA.Game and AA.Game.GetState and AA.Game:GetState().phase == "PLAYING" then
-        state.message = L("missionInProgress")
+        SetMessage("missionInProgress")
         Refresh()
         return
     end
 
     local player = EnsurePlayer(LocalName())
     player.ready = ready and true or false
-    state.message = player.ready and L("playerReady") or L("playerWaiting")
+    SetMessage(player.ready and "playerReady" or "playerWaiting")
 
     BroadcastPlayer(player.name)
     Refresh()
@@ -365,10 +443,14 @@ end
 function AA.Lobby:StartMission()
     if not state.active then
         self:Create()
+
+        if not state.active then
+            return
+        end
     end
 
     if not self:IsHost() then
-        state.message = L("onlyHostCanStart")
+        SetMessage("onlyHostCanStart")
         Refresh()
         return
     end
@@ -376,18 +458,18 @@ function AA.Lobby:StartMission()
     local ready, count = AllReady()
 
     if not ready then
-        state.message = L("allPlayersNotReady")
+        SetMessage("allPlayersNotReady")
         Refresh()
         return
     end
 
     if count > 1 and (not HasSpymaster("RED") or not HasSpymaster("BLUE")) then
-        state.message = L("spymasterAdvice")
+        SetMessage("spymasterAdvice")
         Refresh()
         return
     end
 
-    state.message = L("missionStartedByHost")
+    SetMessage("missionStartedByHost")
     AA.Game:NewGame(nil, true)
     Refresh()
 end
@@ -398,7 +480,7 @@ function AA.Lobby:OnComm(command, args, sender)
         state.active = true
         state.host = host
         EnsurePlayer(host)
-        state.message = L("lobbyDetected", AA:ShortName(host))
+        SetMessage("lobbyDetected", AA:ShortName(host))
         Refresh()
         return
     end
@@ -407,7 +489,7 @@ function AA.Lobby:OnComm(command, args, sender)
         local playerName = args[1] or sender
         state.active = true
         EnsurePlayer(playerName)
-        state.message = L("playerJoinedLobby", AA:ShortName(playerName))
+        SetMessage("playerJoinedLobby", AA:ShortName(playerName))
 
         if self:IsHost() then
             self:BroadcastState(sender)
@@ -427,7 +509,7 @@ function AA.Lobby:OnComm(command, args, sender)
         player.role = args[3] or player.role or "AGENT"
         player.ready = args[4] == "1"
         state.active = true
-        state.message = L("lobbyStatusUpdated")
+        SetMessage("lobbyStatusUpdated")
         Refresh()
         return
     end
@@ -435,13 +517,13 @@ function AA.Lobby:OnComm(command, args, sender)
     if command == "LEAVE" then
         local playerName = args[1] or sender
         state.players[playerName] = nil
-        state.message = L("playerLeftLobby", AA:ShortName(playerName))
+        SetMessage("playerLeftLobby", AA:ShortName(playerName))
 
         if playerName == state.host then
             state.active = false
             state.host = nil
             state.players = {}
-            state.message = L("hostLeftLobby")
+            SetMessage("hostLeftLobby")
         end
 
         Refresh()

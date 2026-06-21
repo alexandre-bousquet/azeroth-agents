@@ -2,7 +2,7 @@
 ## Title: Azeroth Agents
 ## Notes: Team-based deduction minigame.
 ## Author: Worriades
-## Version: 0.4.3
+## Version: 0.4.4
 ## SavedVariables: AzerothAgentsDB
 
 Core.lua

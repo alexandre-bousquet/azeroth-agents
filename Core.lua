@@ -1,7 +1,7 @@
 local addonName, AA = ...
 
 AA.name = addonName
-AA.version = "0.4.3"
+AA.version = "0.4.4"
 
 function AA:GetPlayerName()
     local name, realm = UnitFullName("player")

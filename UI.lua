@@ -233,15 +233,16 @@ end
 local function RefreshButtons()
     local localPlayer = AA.Lobby and AA.Lobby:GetLocalPlayer() or nil
     local lobbyActive = AA.Lobby and AA.Lobby.IsActive and AA.Lobby:IsActive()
+    local canUseGroupLobby = AA.Lobby and AA.Lobby.CanUseGroupLobby and AA.Lobby:CanUseGroupLobby()
 
     if ui.createButton then
         ui.createButton:SetText(L("createLobby"))
-        SetButtonEnabled(ui.createButton, not lobbyActive)
+        SetButtonEnabled(ui.createButton, canUseGroupLobby and not lobbyActive)
     end
 
     if ui.joinButton then
         ui.joinButton:SetText(L("joinLobby"))
-        SetButtonEnabled(ui.joinButton, not lobbyActive)
+        SetButtonEnabled(ui.joinButton, canUseGroupLobby and not lobbyActive)
     end
 
     if ui.leaveButton then
@@ -362,6 +363,12 @@ function AA.UI:Init()
     frame:Hide()
 
     ui.frame = frame
+
+    ui.groupEventFrame = CreateFrame("Frame")
+    ui.groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    ui.groupEventFrame:SetScript("OnEvent", function()
+        AA.UI:Refresh()
+    end)
 
     ui.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     ui.title:SetPoint("TOP", 0, -3)
@@ -535,7 +542,7 @@ function AA.UI:Init()
 
     ui.statsText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     ui.statsText:SetPoint("BOTTOM", 0, 14)
-    ui.statsText:SetText(L("versionText", AA.version or "0.4.3"))
+    ui.statsText:SetText(L("versionText", AA.version or "0.4.4"))
 
     self:Refresh()
 end
@@ -557,11 +564,19 @@ function AA.UI:Refresh()
         ui.turnText:SetText(L("noActiveMission"))
     end
 
-    ui.status:SetText(game.message or "")
+    if AA.Game.GetMessage then
+        ui.status:SetText(AA.Game:GetMessage())
+    else
+        ui.status:SetText(game.message or "")
+    end
 
     if AA.Lobby then
         local lobby = AA.Lobby:GetState()
-        ui.lobbyStatus:SetText(lobby.message or L("noLobby"))
+        if AA.Lobby.GetMessage then
+            ui.lobbyStatus:SetText(AA.Lobby:GetMessage())
+        else
+            ui.lobbyStatus:SetText(lobby.message or L("noLobby"))
+        end
         ui.lobbyText:SetText(BuildLobbyText())
     end
 
